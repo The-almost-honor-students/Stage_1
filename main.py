@@ -1,7 +1,4 @@
-class Book:
-    def __init__(self, title, author, header, body, footer):
-        self.title = title
-        self.author = author
-        self.header = header
-        self.body = body
-        self.footer = footer
+from application.bookService import download_book
+
+success = download_book(1342, "data/output")
+print(success)
