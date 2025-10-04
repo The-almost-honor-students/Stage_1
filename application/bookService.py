@@ -1,5 +1,7 @@
 import requests
+from datetime import datetime
 from pathlib import Path
+import shutil
 
 def download_book(book_id:int, output_path:str):
         START_MARKER = "*** START OF THE PROJECT GUTENBERG EBOOK"
@@ -24,3 +26,33 @@ def download_book(book_id:int, output_path:str):
         with open(header_path, "w", encoding="utf-8") as f:
             f.write(header.strip())
         return True
+
+
+def create_datalake(book_id: int):
+    date = datetime.now().strftime("%Y%m%d")
+    hour = datetime.now().strftime("%H")
+
+    datalake_dir = Path("datalake") / date / hour
+    datalake_dir.mkdir(parents=True, exist_ok=True)
+
+    downloads_dir = Path("staging/downloads")
+    body_src = downloads_dir / f"{book_id}_body.txt"
+    header_src = downloads_dir / f"{book_id}_header.txt"
+
+    if not body_src.exists() or not header_src.exists():
+        print(f"Archivos no encontrados en {downloads_dir}")
+        return False
+
+    body_dst = datalake_dir / f"{book_id}.body.txt"
+    header_dst = datalake_dir / f"{book_id}.header.txt"
+
+    shutil.move(str(body_src), str(body_dst))
+    shutil.move(str(header_src), str(header_dst))
+
+    print(f"Archivos movidos a {datalake_dir.resolve()}")
+    return True
+
+
+if __name__ == "__main__":
+    create_datalake(1342)
+
