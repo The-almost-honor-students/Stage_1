@@ -2,15 +2,12 @@ import requests
 from datetime import datetime
 from pathlib import Path
 import shutil
-import os
-
-BASE_PATH = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def download_book(book_id: int, output_path: str):
     START_MARKER = "*** START OF THE PROJECT GUTENBERG EBOOK"
     END_MARKER = "*** END OF THE PROJECT GUTENBERG EBOOK"
 
-    output_path = BASE_PATH / output_path
+    output_path = Path(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
 
     url = f"https://www.gutenberg.org/cache/epub/{book_id}/pg{book_id}.txt"
@@ -30,15 +27,14 @@ def download_book(book_id: int, output_path: str):
         f.write(header.strip())
     return True
 
-
-def create_datalake(book_id: int):
+def create_datalake(book_id: int, download_path: str):
     date = datetime.now().strftime("%Y%m%d")
     hour = datetime.now().strftime("%H")
 
-    datalake_dir = BASE_PATH / "datalake" / date / hour
+    datalake_dir = Path(f"../datalake/{date}/{hour}")
     datalake_dir.mkdir(parents=True, exist_ok=True)
 
-    downloads_dir = BASE_PATH / "staging/downloads"
+    downloads_dir = Path(download_path)
     body_src = downloads_dir / f"{book_id}_body.txt"
     header_src = downloads_dir / f"{book_id}_header.txt"
 
