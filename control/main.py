@@ -4,28 +4,35 @@ from application.bookService import download_book, create_datalake
 from pathlib import Path
 import random
 import time
+
 from apscheduler.schedulers.background import BackgroundScheduler
 
-CONTROL_PATH = Path("../control")
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+CONTROL_PATH = BASE_DIR / "control"
 DOWNLOADS = CONTROL_PATH / "downloaded_books.txt"
 INDEXINGS = CONTROL_PATH / "indexed_books.txt"
-STAGING_DIR = Path("../staging/downloads")
+STAGING_DIR = BASE_DIR / "staging/downloads"
 TOTAL_BOOKS = 70000
 MAX_RETRIES_NEW_BOOK = 10
 SLEEP_SECONDS_BETWEEN_RUNS = 0
+
 
 def _read_ids(path: Path) -> set[str]:
     if path.exists():
         return set(path.read_text(encoding="utf-8").splitlines())
     return set()
 
+
 def _append_id(path: Path, book_id: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding="utf-8") as f:
         f.write(f"{book_id}\n")
 
+
 def _safe_int(s: Union[str, int]) -> int:
     return int(s) if not isinstance(s, int) else s
+
 
 def control_pipeline_step() -> None:
     CONTROL_PATH.mkdir(parents=True, exist_ok=True)
@@ -50,23 +57,32 @@ def control_pipeline_step() -> None:
         print(f"[CONTROL] Downloading new book with ID {candidate_id}...")
         try:
             download_book(candidate_id, str(STAGING_DIR))
-            ok = create_datalake(candidate_id,str(STAGING_DIR))
+            ok = create_datalake(candidate_id, str(STAGING_DIR))
             if ok:
                 _append_id(DOWNLOADS, candidate_id)
-                print(f"[CONTROL] Book {candidate_id} downloaded and registered.")
-                print(f"[CONTROL][WARN] create_datalake({candidate_id}) devolvió False.")
+                print(
+                    f"[CONTROL] Book {candidate_id} downloaded and registered."
+                )
+                print(
+                    f"[CONTROL][WARN] create_datalake({candidate_id}) devolvió False."
+                )
                 return
             else:
                 print(f"[CONTROL][WARN] Libro {candidate_id} no válido.")
         except Exception as e:
             print(f"[CONTROL][ERROR] Descarga {candidate_id} falló: {e}")
-    print("[CONTROL] No se encontró un libro nuevo para descargar en este ciclo.")
+    print(
+        "[CONTROL] No se encontró un libro nuevo para descargar en este ciclo."
+    )
+
 
 if __name__ == "__main__":
 
     scheduler = BackgroundScheduler()
 
-    scheduler.add_job(control_pipeline_step, 'interval', minutes=1)
+    scheduler.add_job(
+        control_pipeline_step, "interval", seconds=2, max_instances=3
+    )
 
     scheduler.start()
 

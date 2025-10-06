@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 import shutil
 
+
 def download_book(book_id: int, output_path: str):
     START_MARKER = "*** START OF THE PROJECT GUTENBERG EBOOK"
     END_MARKER = "*** END OF THE PROJECT GUTENBERG EBOOK"
@@ -27,11 +28,15 @@ def download_book(book_id: int, output_path: str):
         f.write(header.strip())
     return True
 
+
 def create_datalake(book_id: int, download_path: str):
+    BASE_DIR = (
+        Path(__file__).resolve().parent.parent
+    )  # Tocar esto si la intención es que el datalake no este en la raiz de este modulo
     date = datetime.now().strftime("%Y%m%d")
     hour = datetime.now().strftime("%H")
 
-    datalake_dir = Path(f"../datalake/{date}/{hour}")
+    datalake_dir = Path(f"{BASE_DIR}/datalake/{date}/{hour}")
     datalake_dir.mkdir(parents=True, exist_ok=True)
 
     downloads_dir = Path(download_path)
