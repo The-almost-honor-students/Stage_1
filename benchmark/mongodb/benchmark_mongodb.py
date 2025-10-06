@@ -33,7 +33,7 @@ def summarize(elapsed_s: float, n_docs: int):
     print(f"Total: {total_ms:.2f} ms| Ops/s: {ops_sec:,.0f} | Media: {avg_ms:.3f} ms/doc")
 
 
-def main():
+def bench_insert_metadata():
     documents = 10000
     batch_size = 1
     print(f"[INFO] Conectando a MongoDB: {MONGO_URI}")
@@ -53,4 +53,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    bench_insert_metadata()
