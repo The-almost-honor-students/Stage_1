@@ -1,3 +1,4 @@
+import hashlib
 from abc import ABC
 from application.MetadataRepository import MetadataRepository
 from domain.book import Book
@@ -14,12 +15,9 @@ class MetadataMongoDBRepository(MetadataRepository):
     def save_metadata(self, book: Book) -> str:
         if not book.book_id:
             raise ValueError("book_id es obligatorio para guardar en MongoDB.")
-
-        self.col.update_one(
-            {"book_id": book.book_id},
-            {"$set": book.to_dict()},
-            upsert=True
-        )
+        doc = book.to_dict()
+        doc["raw_text_hash"] = hashlib.sha256(str(book.book_id).encode()).hexdigest()
+        self.col.insert_one(doc)
 
         doc = self.col.find_one({"book_id": book.book_id}, {"_id": 1})
         return str(doc["_id"]) if doc else ""
