@@ -1,5 +1,4 @@
 import hashlib
-from abc import ABC
 from application.MetadataRepository import MetadataRepository
 from domain.book import Book
 from pymongo import MongoClient, ASCENDING
@@ -7,9 +6,9 @@ from pymongo.collection import Collection
 
 class MetadataMongoDBRepository(MetadataRepository):
     def __init__(self, client: MongoClient, db_name: str = "books", collection: str = "metadata"):
+        self.collection = client[db_name][collection]
         self.client = client
         self.col: Collection = client[db_name][collection]
-        # Índice único para idempotencia por hash del texto
         self.col.create_index([("raw_text_hash", ASCENDING)], unique=True)
 
     def save_metadata(self, book: Book) -> str:
