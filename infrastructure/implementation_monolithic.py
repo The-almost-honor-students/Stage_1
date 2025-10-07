@@ -63,5 +63,5 @@ def build_datalake_index(folder: str, output_file: str = "inverted_index.json"):
 
 if __name__ == "__main__":
     datalake_path = r"C:\Users\salsa\PycharmProjects\Stage_1\datalake\20251006\22"
-    index = build_datalake_index(datalake_path, "datalake_index.json")
-    print(f"Inverted index created with {len(index)} words and saved to 'datalake_index.json'")
+    index = build_datalake_index(datalake_path, "inverted_index.json")
+    print(f"Inverted index created with {len(index)} words and saved to 'inverted_index.json'")
