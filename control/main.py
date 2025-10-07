@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
     scheduler = BackgroundScheduler()
 
-    scheduler.add_job(control_pipeline_step, 'interval', minutes=1)
+    scheduler.add_job(control_pipeline_step, 'interval', seconds=1)
 
     scheduler.start()
 

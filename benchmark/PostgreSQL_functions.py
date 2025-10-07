@@ -1,6 +1,5 @@
 import configparser
 from datetime import datetime
-
 import psycopg2
 from psycopg2 import sql
 
