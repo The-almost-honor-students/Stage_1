@@ -81,7 +81,7 @@ def bench_build_inverted_index(book_ids: List[int]) -> Tuple[float, float, float
     )
     t0 = time.perf_counter()
     for bid in book_ids:
-        repo.index_book(Book(book_id=bid, title=None, author=None, language=None))
+        repo.index_book(bid)
     t1 = time.perf_counter()
     total_ms, ops_sec, avg_ms = summarize(t1 - t0, len(book_ids))
     return total_ms, ops_sec, avg_ms

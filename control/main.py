@@ -5,6 +5,8 @@ import random
 import time
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from infrastructure.InvertedIndexMongoDBRepository import InvertedIndexMongoDBRepository
+
 CONTROL_PATH = Path("../control")
 DOWNLOADS = CONTROL_PATH / "downloaded_books.txt"
 INDEXINGS = CONTROL_PATH / "indexed_books.txt"
@@ -37,7 +39,8 @@ def control_pipeline_step() -> None:
         book_id = _safe_int(book_id_str)
         print(f"[CONTROL] Scheduling book {book_id} for indexing...")
         try:
-
+            inverted_index = InvertedIndexMongoDBRepository()
+            inverted_index.index_book(book_id)
             _append_id(INDEXINGS, book_id)
             print(f"[CONTROL] Book {book_id} successfully indexed.")
         except Exception as e:

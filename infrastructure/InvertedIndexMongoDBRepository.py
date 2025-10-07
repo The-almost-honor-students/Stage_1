@@ -33,11 +33,11 @@ class InvertedIndexMongoDBRepository(InvertedIndexRepository):
         self.stopwords = self._load_stopwords(stopwords_path) if stopwords_path else set()
         self.stemmer = PorterStemmer() if use_stemming else None
 
-    def index_book(self, book: Book) -> bool:
-        if book.book_id is None:
+    def index_book(self, book_id: int) -> bool:
+        if book_id is None:
             return False
 
-        text = self._read_book_body_latest(int(book.book_id))
+        text = self._read_book_body_latest(int(book_id))
         if not text:
             return True
 
@@ -45,7 +45,7 @@ class InvertedIndexMongoDBRepository(InvertedIndexRepository):
         if not doc_terms:
             return True
 
-        bid = int(book.book_id)
+        bid = int(book_id)
         ops = [
             UpdateOne({"term": term}, {"$addToSet": {"postings": bid}}, upsert=True)
             for term in doc_terms
