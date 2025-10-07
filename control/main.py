@@ -1,9 +1,14 @@
 from typing import Union
-from application.bookService import download_book, create_datalake
 from pathlib import Path
 import random
 import time
+
 from apscheduler.schedulers.background import BackgroundScheduler
+from pymongo import MongoClient
+
+from application.bookService import download_book, create_datalake, BookService
+from infrastructure.InvertedIndexMongoDBRepository import InvertedIndexMongoDBRepository
+from utils.DatalakeDetector import detect_datalake_root
 
 CONTROL_PATH = Path("../control")
 DOWNLOADS = CONTROL_PATH / "downloaded_books.txt"
@@ -32,17 +37,37 @@ def control_pipeline_step() -> None:
     downloaded = _read_ids(DOWNLOADS)
     indexed = _read_ids(INDEXINGS)
     ready_to_index = downloaded - indexed
+    from infrastructure.MetadataMongoDBRepository import MetadataMongoDBRepository
+    from application.bookService import BookService
+
+
+    mongo_client = MongoClient("mongodb://localhost:27017")
+
+    metadata_repo = MetadataMongoDBRepository(
+        client=mongo_client,
+        db_name="inverted_db",
+        collection="metadata"
+    )
+
     if ready_to_index:
-        book_id_str = ready_to_index.pop()
-        book_id = _safe_int(book_id_str)
+        book_id = _safe_int(ready_to_index.pop())
         print(f"[CONTROL] Scheduling book {book_id} for indexing...")
         try:
-
+            datalake_root = str(detect_datalake_root())
+            inverted_index = InvertedIndexMongoDBRepository(
+                uri="mongodb://localhost:27017",
+                db_name="inverted_db",
+                datalake_root=datalake_root,
+                index_collection="inverted_index"
+            )
+            inverted_index.index_book(book_id)
+            BookService(metadata_repo).create_metadata(book_id)
             _append_id(INDEXINGS, book_id)
             print(f"[CONTROL] Book {book_id} successfully indexed.")
         except Exception as e:
             print(f"[CONTROL][ERROR] Falló el indexado de {book_id}: {e}")
         return
+
     for _ in range(MAX_RETRIES_NEW_BOOK):
         candidate_id = random.randint(1, TOTAL_BOOKS)
         if str(candidate_id) in downloaded:
@@ -50,7 +75,7 @@ def control_pipeline_step() -> None:
         print(f"[CONTROL] Downloading new book with ID {candidate_id}...")
         try:
             download_book(candidate_id, str(STAGING_DIR))
-            ok = create_datalake(candidate_id,str(STAGING_DIR))
+            ok = create_datalake(candidate_id, str(STAGING_DIR))
             if ok:
                 _append_id(DOWNLOADS, candidate_id)
                 print(f"[CONTROL] Book {candidate_id} downloaded and registered.")
@@ -59,16 +84,17 @@ def control_pipeline_step() -> None:
                 print(f"[CONTROL][WARN] Libro {candidate_id} no válido.")
         except Exception as e:
             print(f"[CONTROL][ERROR] Descarga {candidate_id} falló: {e}")
+
     print("[CONTROL] No se encontró un libro nuevo para descargar en este ciclo.")
 
 if __name__ == "__main__":
-
     scheduler = BackgroundScheduler()
-    scheduler.add_job(control_pipeline_step, 'interval', seconds=1)
+    scheduler.add_job(control_pipeline_step, "interval", seconds=4)
     scheduler.start()
-
+    print("[CONTROL] Starting...")
     try:
         while True:
             time.sleep(1)
     except (KeyboardInterrupt, SystemExit):
         scheduler.shutdown()
+        print("[CONTROL] Scheduler stopped.")

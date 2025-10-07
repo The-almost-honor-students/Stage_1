@@ -2,7 +2,11 @@ import requests
 from datetime import datetime
 from pathlib import Path
 import shutil
+
+from numpy.distutils.conv_template import header
+
 from application.MetadataRepository import MetadataRepository
+from utils.DatalakeDetector import detect_datalake_root
 from utils.GutenbergHeaderSerializer import GutenbergHeaderSerializer
 
 
@@ -57,9 +61,20 @@ def download_book(book_id: int, output_path: str):
 
 
 class BookService:
-    def __init__(self,metadata_repository:MetadataRepository):
+    def __init__(self, metadata_repository: MetadataRepository):
         self.metadata_repository = metadata_repository
 
-    def create_metadata(self,book_id: int, download_path: str):
-        header = GutenbergHeaderSerializer.from_file(download_path)
-        self.metadata_repository.save_metadata(header)
+    def create_metadata(self, book_id: int):
+        download_path = self.find_book_in_datalake(book_id)
+        book_header = GutenbergHeaderSerializer.from_file(download_path["header"])
+        self.metadata_repository.save_metadata(book_header)
+
+    def find_book_in_datalake(self, book_id: int, datalake_root: str = "datalake") -> dict:
+        datalake_path = detect_datalake_root()
+        matches = {"header": None, "body": None}
+        for path in datalake_path.rglob(f"{book_id}.*.txt"):
+            if path.name.endswith(".header.txt"):
+                matches["header"] = str(path)
+            elif path.name.endswith(".body.txt"):
+                matches["body"] = str(path)
+        return matches
