@@ -103,7 +103,7 @@ def save_benchmark_results(index_results, query_results, output_file="benchmark_
 
 
 if __name__ == "__main__":
-    DATA_PATH = r"C:\Users\salsa\PycharmProjects\Stage_1\datalake\20251006\22"
+    DATA_PATH = r"C:\Users\salsa\PycharmProjects\Stage_1\datalake"
     OUTPUT_FILE = "inverted_index.json"
     RESULTS_FILE = "benchmark_results.json"
 

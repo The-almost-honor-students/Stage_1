@@ -1,32 +1,32 @@
 {
   "indexing": {
-    "build_time": 1.0394894001074135,
-    "memory_used": 32.27734375,
+    "build_time": 1.0073747001588345,
+    "memory_used": 32.13671875,
     "index_size": 4.792197227478027,
     "total_words": 90394,
-    "words_per_sec": 86960.00169954529
+    "words_per_sec": 89732.25155023987
   },
   "queries": {
     "love": {
       "num_results": 23,
-      "latency_ms": 0.043
+      "latency_ms": 0.054
     },
     "war peace": {
       "num_results": 20,
-      "latency_ms": 0.02
+      "latency_ms": 0.045
     },
     "science fiction": {
       "num_results": 7,
-      "latency_ms": 0.01
+      "latency_ms": 0.014
     },
     "philosophy": {
       "num_results": 12,
-      "latency_ms": 0.007
+      "latency_ms": 0.01
     },
     "revolution": {
       "num_results": 10,
       "latency_ms": 0.005
     }
   },
-  "timestamp": "2025-10-07 12:14:13"
+  "timestamp": "2025-10-07 12:25:00"
 }
