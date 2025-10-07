@@ -6,7 +6,7 @@ from typing import List, Dict
 class InvertedIndexRepository(ABC):
 
     @abstractmethod
-    def index_book(self, book: Book) -> bool:
+    def index_book(self, book: int) -> bool:
         pass
 
     @abstractmethod
