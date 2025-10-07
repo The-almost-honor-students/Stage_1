@@ -1,115 +1,151 @@
 import os
 import time
-import psutil
-import json
+import random
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 from infrastructure.implementation_monolithic import build_datalake_index
 
+DATALAKE_ROOT = r"C:\Users\salsa\PycharmProjects\Stage_1\datalake"
+OUTPUT_INDEX = "inverted_index.json"
+USE_STEMMING = False  # Optional: implement stemming in clean_text_simple if needed
+DATASET_SIZES = [50, 200, 500, 1000]
+PLOTS_DIR = Path("inverted_bench_plots")
+PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
-def benchmark_index_build(build_func, datalake_path, output_file="inverted_index.json"):
-    """Benchmark the efficiency of the inverted index build process."""
-    process = psutil.Process(os.getpid())
-    mem_before = process.memory_info().rss / (1024 * 1024)
 
+def list_book_ids_from_datalake(datalake_root: str):
+    ids = set()
+    for p in Path(datalake_root).rglob("*.body.txt"):
+        try:
+            bid = int(p.name.split(".")[0])
+            ids.add(bid)
+        except ValueError:
+            continue
+    return sorted(ids)
+
+
+def sample_terms_from_index(index: dict, limit: int):
+    if not index:
+        return []
+
+    # Sort terms by frequency
+    term_freqs = [(term, len(postings)) for term, postings in index.items()]
+    term_freqs.sort(key=lambda x: x[1], reverse=True)
+
+    top = [t for t, _ in term_freqs[:max(1, len(term_freqs)//10)]]
+    mid = [t for t, _ in term_freqs[len(term_freqs)//3:2*len(term_freqs)//3]]
+    rare = [t for t, _ in term_freqs[-max(1, len(term_freqs)//10):]]
+
+    out = []
+    each = max(1, limit // 3)
+    for bucket in (top, mid, rare):
+        for _ in range(each):
+            out.append(random.choice(bucket))
+    while len(out) < limit:
+        out.append(random.choice(mid if mid else top))
+    random.shuffle(out)
+    return out
+
+
+def bench_build_index(book_ids, datalake_root):
     start = time.perf_counter()
-    index = build_func(datalake_path, output_file)
+    index = build_datalake_index(datalake_root, OUTPUT_INDEX)
     end = time.perf_counter()
-
-    mem_after = process.memory_info().rss / (1024 * 1024)
-
-    build_time = end - start
-
-    # Handle potential division by zero if datalake is empty
-    datalake_size_bytes = sum(f.stat().st_size for f in Path(datalake_path).glob("*.txt"))
-    datalake_size = datalake_size_bytes / (1024 * 1024) if datalake_size_bytes > 0 else 1e-6
-
-    # Safely check if file exists before stat
-    index_size = Path(output_file).stat().st_size / (1024 * 1024) if Path(output_file).exists() else 0
-
-    total_words = len(index) if isinstance(index, dict) else 0
-    words_per_sec = total_words / build_time if build_time > 0 else 0
-
-    print("Indexing Efficiency Benchmark")
-    print("-----------------------------------")
-    print(f"Total words indexed: {total_words}")
-    print(f"Build time:           {build_time:.2f} seconds")
-    print(f"Memory used:          {mem_after - mem_before:.2f} MB")
-    print(f"Index file size:      {index_size:.2f} MB")
-    print(f"Text data size:       {datalake_size:.2f} MB")
-    print(f"Words per second:     {words_per_sec:.2f}")
-    print(f"Index/Text ratio:     {(index_size / datalake_size):.2f}")
-
-    return {
-        "build_time": build_time,
-        "memory_used": mem_after - mem_before,
-        "index_size": index_size,
-        "total_words": total_words,
-        "words_per_sec": words_per_sec,
-    }
-
-
-def load_index(index_file):
-    """Load the JSON inverted index file."""
-    if not Path(index_file).exists():
-        raise FileNotFoundError(f"Index file not found: {index_file}")
-
-    with open(index_file, "r", encoding="utf-8") as f:
-        return json.load(f)
+    elapsed = end - start
+    total_ms = elapsed * 1000.0
+    ops_sec = len(book_ids) / elapsed if elapsed > 0 else float("inf")
+    avg_ms = total_ms / len(book_ids) if book_ids else 0
+    return total_ms, ops_sec, avg_ms, index
 
 
 def query_index(index, words):
-    """Perform a query (intersection of all given words)."""
-    if not words:
-        return set()
-
     results = [set(index.get(word, [])) for word in words]
     return set.intersection(*results) if results else set()
 
 
-def benchmark_query_speed(index_file, queries):
-    """Benchmark query latency for multiple queries."""
-    index = load_index(index_file)
-    query_output = {}
-
-    print("\n Query Speed Benchmark")
-    print("-----------------------------------")
-
-    for q in queries:
-        words = q.lower().split()
-        start = time.perf_counter()
-        results = query_index(index, words)
-        elapsed = (time.perf_counter() - start) * 1000  # ms
-        print(f"Query: '{q}' -> {len(results)} results in {elapsed:.3f} ms")
-
-        query_output[q] = {
-            "num_results": len(results),
-            "latency_ms": round(elapsed, 3)
-        }
-
-    return query_output
-
-def save_benchmark_results(index_results, query_results, output_file="benchmark_results.json"):
-    full_results = {
-        "indexing": index_results,
-        "queries": query_results,
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-    }
-
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(full_results, f, ensure_ascii=False, indent=2)
-
-    print(f"\n Results saved to {output_file}")
+def bench_query_performance(index, n_queries: int):
+    terms = sample_terms_from_index(index, n_queries)
+    if not terms:
+        return 0.0, 0.0, 0.0
+    # Warm-up
+    for q in terms[:10]:
+        query_index(index, [q])
+    t0 = time.perf_counter()
+    for q in terms:
+        query_index(index, [q])
+    t1 = time.perf_counter()
+    total_ms = (t1 - t0) * 1000.0
+    ops_sec = len(terms) / (t1 - t0) if (t1 - t0) > 0 else float("inf")
+    avg_ms = total_ms / len(terms) if terms else 0
+    return total_ms, ops_sec, avg_ms
 
 
 if __name__ == "__main__":
-    DATA_PATH = r"C:\Users\salsa\PycharmProjects\Stage_1\datalake"
-    OUTPUT_FILE = "inverted_index.json"
-    RESULTS_FILE = "benchmark_results.json"
+    all_ids = list_book_ids_from_datalake(DATALAKE_ROOT)
+    dataset_sizes = [n for n in DATASET_SIZES if n <= len(all_ids)]
 
-    index_results = benchmark_index_build(build_datalake_index, DATA_PATH, OUTPUT_FILE)
+    idx_total_list, idx_ops_list, idx_avg_list = [], [], []
+    qry_total_list, qry_ops_list, qry_avg_list = [], [], []
 
-    queries = ["love", "war peace", "science fiction", "philosophy", "revolution"]
-    query_results = benchmark_query_speed(OUTPUT_FILE, queries)
+    print("="*90)
+    print(f"{'N_BOOKS':>10} | {'IDX TOTAL (ms)':>15} | {'IDX OPS/s':>12} | {'IDX AVG (ms)':>12} | "
+          f"{'QRY TOTAL (ms)':>15} | {'QRY OPS/s':>12} | {'QRY AVG (ms)':>12}")
+    print("="*90)
 
-    save_benchmark_results(index_results, query_results, RESULTS_FILE)
+    for n in dataset_sizes:
+        subset = all_ids[:n]
+        idx_total, idx_ops, idx_avg, index = bench_build_index(subset, DATALAKE_ROOT)
+        n_queries = max(50, n // 2)
+        qry_total, qry_ops, qry_avg = bench_query_performance(index, n_queries)
+
+        idx_total_list.append(idx_total)
+        idx_ops_list.append(idx_ops)
+        idx_avg_list.append(idx_avg)
+        qry_total_list.append(qry_total)
+        qry_ops_list.append(qry_ops)
+        qry_avg_list.append(qry_avg)
+
+        print(f"{n:>10} | {idx_total:>15.2f} | {idx_ops:>12.0f} | {idx_avg:>12.3f} | "
+              f"{qry_total:>15.2f} | {qry_ops:>12.0f} | {qry_avg:>12.3f}")
+
+    print("="*90)
+
+    # Plotting results
+    plt.figure(figsize=(9, 5))
+    plt.plot(dataset_sizes, idx_total_list, marker="o", label="Index Total Time")
+    plt.plot(dataset_sizes, qry_total_list, marker="o", label="Query Total Time")
+    plt.xlabel("Number of Books")
+    plt.ylabel("Total Time (ms)")
+    plt.title("Monolithic Inverted Index: Total Time by Dataset Size")
+    plt.legend()
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.tight_layout()
+    plt.savefig(PLOTS_DIR / "inv_total_time_by_dataset.png", dpi=140)
+    plt.close()
+
+    plt.figure(figsize=(9, 5))
+    plt.plot(dataset_sizes, idx_ops_list, marker="o", label="Index Ops/s (books/s)")
+    plt.plot(dataset_sizes, qry_ops_list, marker="o", label="Query Ops/s (searches/s)")
+    plt.xlabel("Number of Books")
+    plt.ylabel("Operations per Second")
+    plt.title("Monolithic Inverted Index: Throughput by Dataset Size")
+    plt.legend()
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.tight_layout()
+    plt.savefig(PLOTS_DIR / "inv_ops_per_sec_by_dataset.png", dpi=140)
+    plt.close()
+
+    plt.figure(figsize=(9, 5))
+    plt.plot(dataset_sizes, idx_avg_list, marker="o", label="Index Avg Latency (per book)")
+    plt.plot(dataset_sizes, qry_avg_list, marker="o", label="Query Avg Latency (per term)")
+    plt.xlabel("Number of Books")
+    plt.ylabel("Average Time (ms per operation)")
+    plt.title("Monolithic Inverted Index: Average Latency by Dataset Size")
+    plt.legend()
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.tight_layout()
+    plt.savefig(PLOTS_DIR / "inv_avg_latency_by_dataset.png", dpi=140)
+    plt.close()
+
+    print(f"Line graphs saved in: {PLOTS_DIR.resolve()}")

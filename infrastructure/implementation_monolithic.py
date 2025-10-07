@@ -3,6 +3,7 @@ import re
 import json
 import unicodedata
 from collections import defaultdict
+from pathlib import Path
 
 STOPWORDS = {
     "el", "la", "los", "las", "de", "del", "y", "a", "en",
@@ -30,28 +31,36 @@ def build_datalake_index(folder: str, output_file: str = "inverted_index.json"):
         index = defaultdict(list)
 
     # Iterate through all files in the folder
-    for file in os.listdir(folder):
-        if file.endswith(".txt") and "body" in file.lower():
-            book_code_match = re.match(r"(\d+)", file)
-            if not book_code_match:
+    # Build the set of already indexed book codes once
+    already_indexed = set()
+    for books in index.values():
+        already_indexed.update(books)
+
+    # Iterate through all body files recursively
+    for file_path in Path(folder).rglob("*.txt"):
+        if "body" not in file_path.name.lower():
+            continue
+
+        book_code_match = re.match(r"(\d+)", file_path.name)
+        if not book_code_match:
+            continue
+        book_code = book_code_match.group(1)
+
+        if book_code in already_indexed:
+            continue
+        already_indexed.add(book_code)
+
+        # Read and index
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            text = f.read()
+
+        clean_text = clean_text_simple(text)
+        words = set(clean_text.split())
+
+        for word in words:
+            if word in STOPWORDS or len(word) < MIN_LENGTH:
                 continue
-            book_code = book_code_match.group(1)
-
-            # Avoid re-indexing the same book if it's already in the index
-            if any(book_code in books for books in index.values()):
-                continue
-
-            body_path = os.path.join(folder, file)
-            with open(body_path, "r", encoding="utf-8", errors="ignore") as f:
-                text = f.read()
-
-            clean_text = clean_text_simple(text)
-            words = set(clean_text.split())
-
-            for word in words:
-                if word in STOPWORDS or len(word) < MIN_LENGTH:
-                    continue
-                index[word].append(book_code)
+            index[word].append(book_code)
 
     # Save to JSON
     index_json = dict(index)
