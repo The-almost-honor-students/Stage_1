@@ -13,7 +13,7 @@ DB_NAME = "bench_inverted"
 INDEX_COLLECTION = "inverted_index"
 DATALAKE_ROOT = "/Users/giselabelmontecruz/PycharmProjects/Stage_1/datalake"
 USE_STEMMING = True
-DATASET_SIZES = [50, 200, 500, 1000]
+DATASET_SIZES = [20, 40, 60, 80, 100, 120, 150, 200, 250, 300]
 PLOTS_DIR = Path("inverted_bench_plots")
 PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -134,37 +134,67 @@ if __name__ == "__main__":
         print(f"{n:>10} | {idx_total:>15.2f} | {idx_ops:>12.0f} | {idx_avg:>12.3f} | "
               f"{qry_total:>15.2f} | {qry_ops:>12.0f} | {qry_avg:>12.3f}")
     print("=" * 108)
+
+    # Indexing-only plots
     plt.figure(figsize=(9, 5))
-    plt.plot(dataset_sizes, idx_total_list, marker="o", label="Index Total Time")
-    plt.plot(dataset_sizes, qry_total_list, marker="o", label="Query Total Time")
+    plt.plot(dataset_sizes, idx_total_list, marker="o", label="Index Total Time (ms)")
     plt.xlabel("Number of Books")
     plt.ylabel("Total Time (ms)")
-    plt.title("Inverted Index: Total Time by Dataset Size")
-    plt.legend()
+    plt.title("Indexing: Total Time by Dataset Size")
     plt.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
-    plt.savefig(PLOTS_DIR / "inv_total_time_by_dataset.png", dpi=140)
+    plt.savefig(PLOTS_DIR / "index_total_time.png", dpi=140)
     plt.close()
+
     plt.figure(figsize=(9, 5))
-    plt.plot(dataset_sizes, idx_ops_list, marker="o", label="Index Ops/s (books/s)")
-    plt.plot(dataset_sizes, qry_ops_list, marker="o", label="Query Ops/s (searches/s)")
+    plt.plot(dataset_sizes, idx_ops_list, marker="o", label="Index Throughput (books/s)")
     plt.xlabel("Number of Books")
-    plt.ylabel("Operations per Second")
-    plt.title("Inverted Index: Throughput by Dataset Size")
-    plt.legend()
+    plt.ylabel("Throughput (books/s)")
+    plt.title("Indexing: Throughput by Dataset Size")
     plt.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
-    plt.savefig(PLOTS_DIR / "inv_ops_per_sec_by_dataset.png", dpi=140)
+    plt.savefig(PLOTS_DIR / "index_throughput.png", dpi=140)
     plt.close()
+
     plt.figure(figsize=(9, 5))
-    plt.plot(dataset_sizes, idx_avg_list, marker="o", label="Index Avg Latency (per book)")
-    plt.plot(dataset_sizes, qry_avg_list, marker="o", label="Query Avg Latency (per term)")
+    plt.plot(dataset_sizes, idx_avg_list, marker="o", label="Index Avg Latency (ms/book)")
     plt.xlabel("Number of Books")
-    plt.ylabel("Average Time (ms per operation)")
-    plt.title("Inverted Index: Average Latency by Dataset Size")
-    plt.legend()
+    plt.ylabel("Avg Latency (ms/book)")
+    plt.title("Indexing: Average Latency by Dataset Size")
     plt.grid(True, linestyle="--", alpha=0.4)
     plt.tight_layout()
-    plt.savefig(PLOTS_DIR / "inv_avg_latency_by_dataset.png", dpi=140)
+    plt.savefig(PLOTS_DIR / "index_avg_latency.png", dpi=140)
     plt.close()
+
+    # Query-only plots
+    plt.figure(figsize=(9, 5))
+    plt.plot(dataset_sizes, qry_total_list, marker="o", label="Query Total Time (ms)")
+    plt.xlabel("Number of Books")
+    plt.ylabel("Total Time (ms)")
+    plt.title("Query: Total Time by Dataset Size")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.tight_layout()
+    plt.savefig(PLOTS_DIR / "query_total_time.png", dpi=140)
+    plt.close()
+
+    plt.figure(figsize=(9, 5))
+    plt.plot(dataset_sizes, qry_ops_list, marker="o", label="Query Throughput (searches/s)")
+    plt.xlabel("Number of Books")
+    plt.ylabel("Throughput (searches/s)")
+    plt.title("Query: Throughput by Dataset Size")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.tight_layout()
+    plt.savefig(PLOTS_DIR / "query_throughput.png", dpi=140)
+    plt.close()
+
+    plt.figure(figsize=(9, 5))
+    plt.plot(dataset_sizes, qry_avg_list, marker="o", label="Query Avg Latency (ms/search)")
+    plt.xlabel("Number of Books")
+    plt.ylabel("Avg Latency (ms/search)")
+    plt.title("Query: Average Latency by Dataset Size")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.tight_layout()
+    plt.savefig(PLOTS_DIR / "query_avg_latency.png", dpi=140)
+    plt.close()
+
     print(f"Line graphs saved in: {PLOTS_DIR.resolve()}")
