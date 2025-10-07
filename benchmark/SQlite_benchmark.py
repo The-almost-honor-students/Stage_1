@@ -1,209 +1,316 @@
 import time
-import random
 import statistics
-from pathlib import Path
 import json
+import random
+from pathlib import Path
+from typing import List, Tuple
 
-from application.sqlite_book_service import SQLiteBookService
+from application.inverted_index import InvertedIndex, Tokenizer
+from application.sqlite_indexer import SQLiteIndexer
 
 
-class Benchmark:
-    def __init__(self):
+class IndexerBenchmark:
+
+    def __init__(
+        self,
+        indexer: InvertedIndex,
+        datalake_path: str = f"{Path(__file__).resolve().parent.parent}/datalake",
+    ):
+
+        self.indexer = indexer
+        self.datalake_path = Path(datalake_path)
+        self.tokenizer = Tokenizer()
         self.results = {}
-        self.sqlite_service = SQLiteBookService("../benchmark/books.db")
 
-    def benchmark_speed(self, num_runs=100, max_id: int = 100000):
-        """Benchmark: Velocidad de consulta (buscar si un libro existe)"""
+    def load_documents(
+        self, max_docs: int = None
+    ) -> List[Tuple[int, List[str]]]:
 
-        downloads_path = (
-            Path(__file__).parent.parent / "control" / "downloaded_books.txt"
-        )
-        downloaded = (
-            set(downloads_path.read_text().splitlines())
-            if downloads_path.exists()
-            else set()
-        )
-        downloaded: set[str] = set(downloaded)
-        num_books = len(downloaded)
+        documents = []
 
-        print(
-            f"\n=== VELOCIDAD: {num_runs} consultas con {num_books} libros almacenados ==="
-        )
+        if not self.datalake_path.exists():
+            print(f"[WARN] Datalake no encontrado en {self.datalake_path}")
+            return documents
 
-        file_times = []
-        sqlite_times = []
+        files = list(self.datalake_path.rglob("*.txt"))
+        if max_docs:
+            files = files[:max_docs]
 
-        for _ in range(num_runs):
-            book_id = random.randint(1, max_id)
+        print(f"Loading {len(files)} documents...")
+        for i, file_path in enumerate(files, 1):
+            try:
+                doc_id = int(file_path.stem.split(".")[0])
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                tokens = self.tokenizer.tokenize(content)
+                documents.append((doc_id, tokens))
 
-            start = time.perf_counter()
-            exists = str(book_id) in downloaded
-            file_times.append(time.perf_counter() - start)
+                if i % 100 == 0:
+                    print(f"  Loaded {i}/{len(files)} documents...")
+            except Exception as e:
+                print(f"[ERROR] No se pudo cargar {file_path}: {e}")
 
-            start = time.perf_counter()
-            exists = self.sqlite_service.is_downloaded(book_id)
-            sqlite_times.append(time.perf_counter() - start)
+        return documents
 
-        speedup = statistics.mean(file_times) / statistics.mean(sqlite_times)
+    def benchmark_indexing(self, documents: List[Tuple[int, List[str]]]):
 
-        self.results["speed"] = {
-            "num_books": num_books,
-            "num_queries": num_runs,
-            "file_system": {
-                "mean_ms": statistics.mean(file_times) * 1000,
-                "median_ms": statistics.median(file_times) * 1000,
-                "total_s": sum(file_times),
-            },
-            "sqlite": {
-                "mean_ms": statistics.mean(sqlite_times) * 1000,
-                "median_ms": statistics.median(sqlite_times) * 1000,
-                "total_s": sum(sqlite_times),
-            },
-            "speedup": speedup,
-        }
+        print("\n" + "=" * 90)
+        print(" BENCHMARK: INDEXING SPEED")
+        print("=" * 90)
 
-        print(
-            f"File System: {self.results['speed']['file_system']['mean_ms']:.3f}ms por consulta"
-        )
-        print(
-            f"SQLite:      {self.results['speed']['sqlite']['mean_ms']:.3f}ms por consulta"
-        )
-        print(f"SQLite es {speedup:.1f}x más rápido")
+        print(f"\nIndexing {len(documents)} documents...")
+        start = time.perf_counter()
 
-    def benchmark_size(self):
-        """Benchmark: Espacio en disco"""
-        file_size = 0
-        num_books_files = 0
+        for i, (doc_id, tokens) in enumerate(documents, 1):
+            self.indexer.add_document(doc_id, tokens)
 
-        datalake = Path("../datalake")
-        if datalake.exists():
-            files = [f for f in datalake.rglob("*") if f.is_file()]
-            file_size = sum(f.stat().st_size for f in files)
-            num_books_files = len(files)
+            if i % 100 == 0:
+                elapsed = time.perf_counter() - start
+                rate = i / elapsed if elapsed > 0 else 0
+                print(
+                    f"  {i}/{len(documents)} docs indexed ({rate:.1f} docs/s)"
+                )
 
-        control = Path("../control")
-        if control.exists():
-            file_size += sum(
-                f.stat().st_size for f in control.rglob("*") if f.is_file()
-            )
+        total_time = time.perf_counter() - start
 
-        db_path = Path("../benchmark/books.db")
-        sqlite_size = db_path.stat().st_size if db_path.exists() else 0
+        stats = self.indexer.get_stats()
 
-        num_books_sqlite = len(self.sqlite_service.get_downloaded_ids())
-
-        self.results["size"] = {
-            "num_books_file_system": num_books_files,
-            "num_books_sqlite": num_books_sqlite,
-            "file_system_mb": file_size / (1024 * 1024),
-            "sqlite_mb": sqlite_size / (1024 * 1024),
-            "reduction_percent": (
-                ((file_size - sqlite_size) / file_size * 100)
-                if file_size > 0
-                else 0
+        self.results["indexing"] = {
+            "num_documents": len(documents),
+            "total_time_s": total_time,
+            "docs_per_sec": (
+                len(documents) / total_time if total_time > 0 else 0
             ),
+            "stats": stats,
         }
 
-        print(f"\n=== TAMAÑO EN DISCO ===")
+        print(f"\n{'Metric':<25} | {'Value':<20}")
+        print("-" * 50)
+        print(f"{'Total time':<25} | {total_time:<20.3f} s")
         print(
-            f"File System: {self.results['size']['file_system_mb']:.2f} MB ({num_books_files} libros)"
+            f"{'Documents/second':<25} | {self.results['indexing']['docs_per_sec']:<20.1f}"
         )
-        print(
-            f"SQLite:      {self.results['size']['sqlite_mb']:.2f} MB ({num_books_sqlite} libros)"
-        )
-        print(f"Reducción:   {self.results['size']['reduction_percent']:.1f}%")
+        print(f"{'Unique terms':<25} | {stats['unique_terms']:<20}")
+        print(f"{'Total postings':<25} | {stats['total_postings']:<20}")
 
-    def benchmark_scalability(self, test_sizes=None, max_id: int = 100000):
-        """Benchmark: Escalabilidad (cómo crece el tiempo con más datos)"""
+        if "disk_mb" in stats:
+            print(f"{'Disk size':<25} | {stats['disk_mb']:<20.3f} MB")
+        if "memory_mb" in stats:
+            print(f"{'Memory size':<25} | {stats['memory_mb']:<20.3f} MB")
+
+    def benchmark_search(self, num_queries: int = 100):
+
+        print("\n" + "=" * 90)
+        print(f" BENCHMARK: SEARCH SPEED ({num_queries} queries)")
+        print("=" * 90)
+
+        stats = self.indexer.get_stats()
+        print(f"\nGenerating {num_queries} random search terms...")
+
+        search_terms = []
+        sample_terms = [
+            "the",
+            "and",
+            "book",
+            "test",
+            "data",
+            "python",
+            "algorithm",
+            "structure",
+            "search",
+            "index",
+            "document",
+            "example",
+        ]
+
+        for _ in range(num_queries):
+            search_terms.append(random.choice(sample_terms))
+
+        print("Executing searches...")
+        search_times = []
+
+        for i, term in enumerate(search_terms, 1):
+            start = time.perf_counter()
+            results = self.indexer.search(term)
+            search_times.append(time.perf_counter() - start)
+
+            if i % 20 == 0:
+                print(f"  {i}/{num_queries} queries completed...")
+
+        self.results["search"] = {
+            "num_queries": num_queries,
+            "mean_ms": statistics.mean(search_times) * 1000,
+            "median_ms": statistics.median(search_times) * 1000,
+            "min_ms": min(search_times) * 1000,
+            "max_ms": max(search_times) * 1000,
+            "total_s": sum(search_times),
+        }
+
+        print(f"\n{'Metric':<25} | {'Value':<20}")
+        print("-" * 50)
+        print(
+            f"{'Mean time':<25} | {self.results['search']['mean_ms']:<20.4f} ms"
+        )
+        print(
+            f"{'Median time':<25} | {self.results['search']['median_ms']:<20.4f} ms"
+        )
+        print(
+            f"{'Min time':<25} | {self.results['search']['min_ms']:<20.4f} ms"
+        )
+        print(
+            f"{'Max time':<25} | {self.results['search']['max_ms']:<20.4f} ms"
+        )
+        print(
+            f"{'Total time':<25} | {self.results['search']['total_s']:<20.4f} s"
+        )
+
+    def benchmark_scalability(self, test_sizes: List[int] = None):
+
         if test_sizes is None:
-            test_sizes = [50, 100, 500, 1000, 5000, 10000, 50000]
+            test_sizes = [10, 50, 100, 500, 1000, 5000]
 
-        downloads_path = (
-            Path(__file__).parent.parent / "control" / "downloaded_books.txt"
-        )
-        downloaded = (
-            set(downloads_path.read_text().splitlines())
-            if downloads_path.exists()
-            else set()
-        )
+        print("\n" + "=" * 90)
+        print(" BENCHMARK: SCALABILITY")
+        print("=" * 90)
+
+        sample_terms = [
+            "the",
+            "and",
+            "book",
+            "test",
+            "data",
+            "python",
+            "algorithm",
+            "structure",
+            "search",
+            "index",
+            "document",
+            "example",
+        ]
 
         scalability = []
 
-        print("\n=== ESCALABILIDAD: Tiempo vs cantidad de consultas ===")
+        print(
+            f"\n{'QUERIES':<12} | {'TOTAL TIME (ms)':<18} | {'AVG TIME (ms)':<18} | {'QUERIES/SEC':<15}"
+        )
+        print("-" * 75)
 
         for size in test_sizes:
-            file_times = []
-            sqlite_times = []
+            search_terms = [random.choice(sample_terms) for _ in range(size)]
 
-            for _ in range(size):
-                book_id = random.randint(1, max_id)
+            start = time.perf_counter()
+            for term in search_terms:
+                _ = self.indexer.search(term)
+            total_time = (time.perf_counter() - start) * 1000
 
-                start = time.perf_counter()
-                exists = str(book_id) in downloaded
-                file_times.append(time.perf_counter() - start)
-
-                start = time.perf_counter()
-                exists = self.sqlite_service.is_downloaded(book_id)
-                sqlite_times.append(time.perf_counter() - start)
-
-            ratio = sum(file_times) / sum(sqlite_times)
-            scalability.append(
-                {
-                    "queries": size,
-                    "file_system_total_ms": sum(file_times) * 1000,
-                    "sqlite_total_ms": sum(sqlite_times) * 1000,
-                    "ratio": ratio,
-                }
+            avg_time = total_time / size
+            queries_per_sec = (
+                (size / (total_time / 1000)) if total_time > 0 else 0
             )
 
             print(
-                f"{size} consultas: File={sum(file_times)*1000:.2f}ms, SQLite={sum(sqlite_times)*1000:.2f}ms (ratio: {ratio:.1f}x)"
+                f"{size:<12} | {total_time:<18.3f} | {avg_time:<18.4f} | {queries_per_sec:<15.1f}"
+            )
+
+            scalability.append(
+                {
+                    "queries": size,
+                    "total_ms": total_time,
+                    "avg_ms": avg_time,
+                    "queries_per_sec": queries_per_sec,
+                }
             )
 
         self.results["scalability"] = scalability
 
     def print_summary(self):
-        """Resumen final"""
-        print("\n" + "=" * 70)
-        print(" RESUMEN DEL BENCHMARK")
-        print("=" * 70)
+        """Imprime resumen final del benchmark"""
+        print("\n" + "=" * 90)
+        print(" BENCHMARK SUMMARY")
+        print("=" * 90)
 
-        if "speed" in self.results:
-            s = self.results["speed"]
+        if "indexing" in self.results:
+            idx = self.results["indexing"]
+            print(f"\n INDEXING:")
+            print(f"   Documents indexed:  {idx['num_documents']}")
+            print(f"   Total time:         {idx['total_time_s']:.2f}s")
             print(
-                f"\n📊 VELOCIDAD ({s['num_queries']} consultas con {s['num_books']} libros):"
+                f"   Speed:              {idx['docs_per_sec']:.1f} docs/second"
             )
-            print(
-                f"   SQLite es {s['speedup']:.1f}x más rápido en consultas individuales"
-            )
+            print(f"   Unique terms:       {idx['stats']['unique_terms']}")
+            print(f"   Total postings:     {idx['stats']['total_postings']}")
 
-        if "size" in self.results:
-            sz = self.results["size"]
-            print(f"\n💾 TAMAÑO EN DISCO:")
-            print(
-                f"   SQLite usa {sz['reduction_percent']:.1f}% menos espacio en disco"
-            )
+            if "disk_mb" in idx["stats"]:
+                print(
+                    f"   Storage (disk):     {idx['stats']['disk_mb']:.3f} MB"
+                )
+            if "memory_mb" in idx["stats"]:
+                print(
+                    f"   Storage (memory):   {idx['stats']['memory_mb']:.3f} MB"
+                )
+
+        if "search" in self.results:
+            srch = self.results["search"]
+            print(f"\n SEARCH ({srch['num_queries']} queries):")
+            print(f"   Mean time:          {srch['mean_ms']:.4f}ms")
+            print(f"   Median time:        {srch['median_ms']:.4f}ms")
+            print(f"   Min time:           {srch['min_ms']:.4f}ms")
+            print(f"   Max time:           {srch['max_ms']:.4f}ms")
 
         if "scalability" in self.results:
-            print(f"\n📈 ESCALABILIDAD:")
+            print(f"\n SCALABILITY:")
             last = self.results["scalability"][-1]
+            print(f"   At {last['queries']} queries:")
+            print(f"   - Total time:       {last['total_ms']:.2f}ms")
+            print(f"   - Avg per query:    {last['avg_ms']:.4f}ms")
             print(
-                f"   Con {last['queries']} consultas, SQLite es {last['ratio']:.1f}x más rápido"
+                f"   - Throughput:       {last['queries_per_sec']:.1f} queries/sec"
             )
 
     def save_results(self, filename: str = "benchmark_results.json"):
-        """Guardar resultados"""
+        """
+        Guarda resultados en JSON
+
+        Args:
+            filename: Nombre del archivo de salida
+        """
         with open(filename, "w") as f:
             json.dump(self.results, f, indent=2)
-        print(f"\n✅ Resultados guardados en {filename}")
+        print(f"\n Results saved to {filename}")
 
 
 if __name__ == "__main__":
-    benchmark = Benchmark()
 
-    benchmark.benchmark_speed(num_runs=50)
-    benchmark.benchmark_size()
-    benchmark.benchmark_scalability(test_sizes=[50])
+    print("=" * 90)
+    print(" INVERTED INDEX BENCHMARK - SQLite Implementation")
+    print("=" * 90)
+
+    indexer = SQLiteIndexer("benchmark_index.db")
+
+    benchmark = IndexerBenchmark(
+        indexer,
+        datalake_path=f"{Path(__file__).resolve().parent.parent}/datalake",
+    )
+
+    print("\n Loading documents...")
+    documents = benchmark.load_documents(max_docs=1000)
+
+    if not documents:
+        print("[ERROR] No documents found. Check your datalake path.")
+        print(f"Looking in: {benchmark.datalake_path}")
+        exit(1)
+
+    print(f"✓ Loaded {len(documents)} documents")
+
+    benchmark.benchmark_indexing(documents)
+    benchmark.benchmark_search(num_queries=100)
+    benchmark.benchmark_scalability(test_sizes=[10, 50, 100, 500, 1000, 5000])
 
     benchmark.print_summary()
-    benchmark.save_results()
+    benchmark.save_results("sqlite_benchmark_results.json")
+
+    indexer.close()
+
+    print("\n" + "=" * 90)
+    print("  BENCHMARK COMPLETE")
+    print("=" * 90)
