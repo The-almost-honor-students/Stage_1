@@ -20,9 +20,6 @@ class MetadataBenchmark:
         self.cur = self.conn.cursor()
         self._create_table()
 
-    # -------------------------------
-    # Crear tabla SQLite
-    # -------------------------------
     def _create_table(self):
         self.cur.execute(
             """
@@ -37,9 +34,6 @@ class MetadataBenchmark:
         )
         self.conn.commit()
 
-    # -------------------------------
-    # Cargar metadatos del datalake a SQLite
-    # -------------------------------
     def load_metadata_to_sqlite(self, max_files=None):
         files = list(self.datalake_path.rglob("*.header.txt"))
         if max_files:
@@ -69,9 +63,6 @@ class MetadataBenchmark:
         self.conn.commit()
         print(f"✓ {len(files)} archivos cargados en SQLite")
 
-    # -------------------------------
-    # Leer metadatos de un archivo
-    # -------------------------------
     def _read_metadata(self, file_path):
         metadata = {}
         with open(file_path, "r", encoding="utf-8") as f:
@@ -85,9 +76,6 @@ class MetadataBenchmark:
             ]
         return metadata
 
-    # -------------------------------
-    # Benchmark velocidad
-    # -------------------------------
     def benchmark_speed(self, num_queries=1000):
         files = list(self.datalake_path.rglob("*.header.txt"))
         if not files:
@@ -101,12 +89,10 @@ class MetadataBenchmark:
             file_path = random.choice(files)
             book_id = int(file_path.stem.split(".")[0])
 
-            # File System
             start = time.perf_counter()
             _ = self._read_metadata(file_path)
             file_times.append(time.perf_counter() - start)
 
-            # SQLite
             start = time.perf_counter()
             self.cur.execute(
                 "SELECT title, author, year, categories FROM books WHERE id=?",
@@ -142,9 +128,6 @@ class MetadataBenchmark:
         )
         print(f"Speedup SQLite: {speedup:.2f}x")
 
-    # -------------------------------
-    # Benchmark tamaño en disco
-    # -------------------------------
     def benchmark_size(self):
         file_size = sum(
             f.stat().st_size for f in self.datalake_path.rglob("*.header.txt")
@@ -168,9 +151,6 @@ class MetadataBenchmark:
         print(f"SQLite: {self.results['size']['sqlite_mb']:.2f} MB")
         print(f"Reducción: {self.results['size']['reduction_percent']:.1f}%")
 
-    # -------------------------------
-    # Benchmark escalabilidad
-    # -------------------------------
     def benchmark_scalability(self, test_sizes=None):
         if test_sizes is None:
             test_sizes = [10, 50, 100, 500, 1000]
@@ -214,21 +194,14 @@ class MetadataBenchmark:
 
         self.results["scalability"] = scalability
 
-    # -------------------------------
-    # Guardar resultados
-    # -------------------------------
     def save_results(self, filename="benchmark_results.json"):
         with open(filename, "w") as f:
             json.dump(self.results, f, indent=2)
         print(f"\nResultados guardados en {filename}")
 
-    # -------------------------------
-    # Visualización
-    # -------------------------------
     def plot_results(self):
         import matplotlib.pyplot as plt
 
-        # Velocidad
         if "speed" in self.results:
             speed = self.results["speed"]
             labels = ["File System", "SQLite"]
@@ -244,7 +217,6 @@ class MetadataBenchmark:
             )
             plt.show()
 
-        # Tamaño
         if "size" in self.results:
             size = self.results["size"]
             labels = ["File System", "SQLite"]
@@ -255,7 +227,6 @@ class MetadataBenchmark:
             plt.title("Comparación de tamaño en disco")
             plt.show()
 
-        # Escalabilidad
         if "scalability" in self.results:
             queries = [s["queries"] for s in self.results["scalability"]]
             file_times = [
@@ -296,28 +267,19 @@ class MetadataBenchmark:
             plt.grid(True)
             plt.show()
 
-    # -------------------------------
-    # Cerrar conexión SQLite
-    # -------------------------------
     def close(self):
         self.conn.close()
 
 
-# -------------------------------
-# EJECUCIÓN PRINCIPAL
-# -------------------------------
 if __name__ == "__main__":
     benchmark = MetadataBenchmark()
 
-    # Cargar metadatos en SQLite
     benchmark.load_metadata_to_sqlite()
 
-    # Ejecutar benchmarks
     benchmark.benchmark_speed(num_queries=5000)
     benchmark.benchmark_size()
     benchmark.benchmark_scalability(test_sizes=[500, 1000, 5000, 10000])
 
-    # Resultados
     benchmark.save_results()
     benchmark.plot_results()
 
