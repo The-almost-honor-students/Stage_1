@@ -1,5 +1,4 @@
 from typing import Union
-
 from application.bookService import download_book, create_datalake
 from pathlib import Path
 import random
@@ -38,6 +37,7 @@ def control_pipeline_step() -> None:
         book_id = _safe_int(book_id_str)
         print(f"[CONTROL] Scheduling book {book_id} for indexing...")
         try:
+
             _append_id(INDEXINGS, book_id)
             print(f"[CONTROL] Book {book_id} successfully indexed.")
         except Exception as e:
@@ -54,7 +54,6 @@ def control_pipeline_step() -> None:
             if ok:
                 _append_id(DOWNLOADS, candidate_id)
                 print(f"[CONTROL] Book {candidate_id} downloaded and registered.")
-                print(f"[CONTROL][WARN] create_datalake({candidate_id}) devolvió False.")
                 return
             else:
                 print(f"[CONTROL][WARN] Libro {candidate_id} no válido.")
@@ -65,9 +64,7 @@ def control_pipeline_step() -> None:
 if __name__ == "__main__":
 
     scheduler = BackgroundScheduler()
-
-    scheduler.add_job(control_pipeline_step, 'interval', minutes=1)
-
+    scheduler.add_job(control_pipeline_step, 'interval', seconds=1)
     scheduler.start()
 
     try:

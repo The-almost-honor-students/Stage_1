@@ -1,7 +1,13 @@
+from __future__ import annotations
+from dataclasses import dataclass, asdict
+from typing import Optional, Dict, Any
+
+@dataclass
 class Book:
-    def __init__(self, title, author, header, body, footer):
-        self.title = title
-        self.author = author
-        self.header = header
-        self.body = body
-        self.footer = footer
+    book_id: Optional[int]
+    title: Optional[str]
+    author: Optional[str]
+    language: Optional[str]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
