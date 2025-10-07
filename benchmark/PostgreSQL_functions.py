@@ -106,5 +106,4 @@ def insert_book_metadata(book_id: int, title: str, author: str, release_date: da
         print(f"❌ Error inserting data: {e}")
     finally:
         cur.close()
-        conn.close()
-
+        conn.close
