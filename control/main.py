@@ -54,7 +54,6 @@ def control_pipeline_step() -> None:
             if ok:
                 _append_id(DOWNLOADS, candidate_id)
                 print(f"[CONTROL] Book {candidate_id} downloaded and registered.")
-                print(f"[CONTROL][WARN] create_datalake({candidate_id}) devolvió False.")
                 return
             else:
                 print(f"[CONTROL][WARN] Libro {candidate_id} no válido.")
@@ -65,7 +64,7 @@ def control_pipeline_step() -> None:
 if __name__ == "__main__":
 
     scheduler = BackgroundScheduler()
-    scheduler.add_job(control_pipeline_step, 'interval', minutes=1)
+    scheduler.add_job(control_pipeline_step, 'interval', seconds=10)
     scheduler.start()
 
     try:

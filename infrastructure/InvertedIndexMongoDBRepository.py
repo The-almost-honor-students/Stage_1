@@ -89,22 +89,29 @@ class InvertedIndexMongoDBRepository(InvertedIndexRepository):
 
     def _load_stopwords(self, path: Optional[str]) -> set:
         try:
-            return {line.strip().lower() for line in open(path, "r", encoding="utf-8").read().splitlines() if line.strip()}
-        except Exception:
+            if path:
+                return {line.strip().lower() for line in open(path, "r", encoding="utf-8").read().splitlines() if
+                        line.strip()}
+            else:
+                import nltk
+                from nltk.corpus import stopwords
+                nltk.download("stopwords", quiet=True)
+                return set(stopwords.words("english"))
+        except Exception as e:
+            print(f"[WARN] No se pudieron cargar las stopwords ({e}), usando conjunto vacío.")
             return set()
 
     def _normalize(self, s: str) -> str:
         s = s.lower()
         s = unicodedata.normalize("NFKD", s)
         s = "".join(ch for ch in s if not unicodedata.combining(ch))
-        s = re.sub(r"[^\w\s]", " ", s)   # quita puntuación
-        s = re.sub(r"\d+", " ", s)       # quita números
+        s = re.sub(r"[^\w\s]", " ", s)
+        s = re.sub(r"\d+", " ", s)
         s = re.sub(r"_", " ", s)
         s = re.sub(r"\s+", " ", s).strip()
         return s
 
     def _tokenize(self, s: str) -> List[str]:
-        # Solo tokens alfabéticos
         return [t for t in s.split(" ") if t.isalpha()]
 
     def _remove_stop(self, tokens: Iterable[str], min_len: int = 3) -> List[str]:
