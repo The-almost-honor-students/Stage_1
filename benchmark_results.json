@@ -1,0 +1,48 @@
+{
+  "speed": {
+    "num_files": 7615,
+    "num_queries": 5000,
+    "file_system": {
+      "mean_ms": 0.012694779880985151,
+      "median_ms": 0.011985997844021767,
+      "total_s": 0.06347389940492576
+    },
+    "sqlite": {
+      "mean_ms": 0.004914771596668289,
+      "median_ms": 0.004613000783137977,
+      "total_s": 0.02457385798334144
+    },
+    "speedup": 2.582984708707707
+  },
+  "size": {
+    "file_system_mb": 6.331409454345703,
+    "sqlite_mb": 0.09765625,
+    "reduction_percent": 98.4575906722796
+  },
+  "scalability": [
+    {
+      "queries": 500,
+      "file_system_total_ms": 7.183625901234336,
+      "sqlite_total_ms": 2.690171073481906,
+      "ratio": 2.67032307798051
+    },
+    {
+      "queries": 1000,
+      "file_system_total_ms": 16.649267243337817,
+      "sqlite_total_ms": 6.261295231524855,
+      "ratio": 2.659077176158504
+    },
+    {
+      "queries": 5000,
+      "file_system_total_ms": 68.88117006747052,
+      "sqlite_total_ms": 26.419168985739816,
+      "ratio": 2.607242116686194
+    },
+    {
+      "queries": 10000,
+      "file_system_total_ms": 129.86174361867597,
+      "sqlite_total_ms": 51.53720337693812,
+      "ratio": 2.5197669859747673
+    }
+  ]
+}
