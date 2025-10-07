@@ -10,7 +10,7 @@ class InvertedIndexRepository(ABC):
         pass
 
     @abstractmethod
-    def search(self, term: str) -> List[int]:
+    def get_index_by_term(self, term: str) -> List[int]:
         pass
 
     @abstractmethod

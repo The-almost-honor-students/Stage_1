@@ -53,7 +53,7 @@ class InvertedIndexMongoDBRepository(InvertedIndexRepository):
         self.col.bulk_write(ops, ordered=False)
         return True
 
-    def search(self, term: str) -> List[int]:
+    def get_index_by_term(self, term: str) -> List[int]:
         t = self._pipeline_single_token(term)
         if not t:
             return []

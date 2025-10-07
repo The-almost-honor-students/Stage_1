@@ -100,10 +100,10 @@ def bench_query_performance(n_queries: int) -> Tuple[float, float, float]:
     if not terms:
         return 0.0, 0.0, 0.0
     for q in terms[:10]:
-        repo.search(q)
+        repo.get_index_by_term(q)
     t0 = time.perf_counter()
     for q in terms:
-        repo.search(q)
+        repo.get_index_by_term(q)
     t1 = time.perf_counter()
     total_ms, ops_sec, avg_ms = summarize(t1 - t0, len(terms))
     return total_ms, ops_sec, avg_ms
