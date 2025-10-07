@@ -1,31 +1,37 @@
 from __future__ import annotations
+
 import time
 import random
 from typing import List, Tuple
 from pathlib import Path
+
 import matplotlib.pyplot as plt
 from pymongo import MongoClient
-from domain.book import Book
+
+from utils.DatalakeDetector import detect_datalake_root
 from infrastructure.InvertedIndexMongoDBRepository import InvertedIndexMongoDBRepository
 
 MONGO_URI = "mongodb://localhost:27017"
 DB_NAME = "bench_inverted"
 INDEX_COLLECTION = "inverted_index"
-DATALAKE_ROOT = "/Users/giselabelmontecruz/PycharmProjects/Stage_1/datalake"
 USE_STEMMING = True
 DATASET_SIZES = [20, 40, 60, 80, 100, 120, 150, 200, 250, 300]
+
 PLOTS_DIR = Path("inverted_bench_plots")
 PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def ensure_nltk_stopwords_ready():
     import nltk
     try:
-        from nltk.corpus import stopwords
+        from nltk.corpus import stopwords  # noqa: F401
     except LookupError:
         nltk.download("stopwords", quiet=True)
 
+
 def ensure_clean_collection(client: MongoClient, db_name: str, coll_name: str):
     client[db_name][coll_name].delete_many({})
+
 
 def summarize(elapsed_s: float, n_ops: int) -> Tuple[float, float, float]:
     total_ms = elapsed_s * 1000.0
@@ -33,7 +39,8 @@ def summarize(elapsed_s: float, n_ops: int) -> Tuple[float, float, float]:
     avg_ms = total_ms / n_ops if n_ops > 0 else 0.0
     return total_ms, ops_sec, avg_ms
 
-def list_book_ids_from_datalake(datalake_root: str) -> List[int]:
+
+def list_book_ids_from_datalake(datalake_root: str | Path) -> List[int]:
     root = Path(datalake_root)
     ids = set()
     for p in root.rglob("*.body.txt"):
@@ -43,6 +50,7 @@ def list_book_ids_from_datalake(datalake_root: str) -> List[int]:
         except ValueError:
             continue
     return sorted(ids)
+
 
 def sample_terms_from_index(client: MongoClient, db_name: str, coll_name: str, limit: int) -> List[str]:
     col = client[db_name][coll_name]
@@ -68,13 +76,14 @@ def sample_terms_from_index(client: MongoClient, db_name: str, coll_name: str, l
     random.shuffle(out)
     return out
 
-def bench_build_inverted_index(book_ids: List[int]) -> Tuple[float, float, float]:
+
+def bench_build_inverted_index(book_ids: List[int], datalake_root: Path) -> Tuple[float, float, float]:
     client = MongoClient(MONGO_URI)
     ensure_clean_collection(client, DB_NAME, INDEX_COLLECTION)
     repo = InvertedIndexMongoDBRepository(
         uri=MONGO_URI,
         db_name=DB_NAME,
-        datalake_root=DATALAKE_ROOT,
+        datalake_root=str(datalake_root),
         index_collection=INDEX_COLLECTION,
         stopwords_path=None,
         use_stemming=USE_STEMMING,
@@ -83,14 +92,14 @@ def bench_build_inverted_index(book_ids: List[int]) -> Tuple[float, float, float
     for bid in book_ids:
         repo.index_book(bid)
     t1 = time.perf_counter()
-    total_ms, ops_sec, avg_ms = summarize(t1 - t0, len(book_ids))
-    return total_ms, ops_sec, avg_ms
+    return summarize(t1 - t0, len(book_ids))
 
-def bench_query_performance(n_queries: int) -> Tuple[float, float, float]:
+
+def bench_query_performance(n_queries: int, datalake_root: Path) -> Tuple[float, float, float]:
     repo = InvertedIndexMongoDBRepository(
         uri=MONGO_URI,
         db_name=DB_NAME,
-        datalake_root=DATALAKE_ROOT,
+        datalake_root=str(datalake_root),
         index_collection=INDEX_COLLECTION,
         stopwords_path=None,
         use_stemming=USE_STEMMING,
@@ -99,40 +108,51 @@ def bench_query_performance(n_queries: int) -> Tuple[float, float, float]:
     terms = sample_terms_from_index(client, DB_NAME, INDEX_COLLECTION, n_queries)
     if not terms:
         return 0.0, 0.0, 0.0
+
     for q in terms[:10]:
         repo.get_index_by_term(q)
+
     t0 = time.perf_counter()
     for q in terms:
         repo.get_index_by_term(q)
     t1 = time.perf_counter()
-    total_ms, ops_sec, avg_ms = summarize(t1 - t0, len(terms))
-    return total_ms, ops_sec, avg_ms
+    return summarize(t1 - t0, len(terms))
+
 
 if __name__ == "__main__":
     ensure_nltk_stopwords_ready()
+    DATALAKE_ROOT = detect_datalake_root()
     all_ids = list_book_ids_from_datalake(DATALAKE_ROOT)
     if not all_ids:
         raise RuntimeError("No <book_id>.body.txt files found in datalake.")
+
     dataset_sizes = [n for n in DATASET_SIZES if n <= len(all_ids)]
+
     print("=" * 108)
     print(f"{'N_BOOKS':>10} | {'IDX TOTAL (ms)':>15} | {'IDX OPS/s':>12} | {'IDX AVG (ms)':>12} | "
           f"{'QRY TOTAL (ms)':>15} | {'QRY OPS/s':>12} | {'QRY AVG (ms)':>12}")
     print("=" * 108)
+
     idx_total_list, idx_ops_list, idx_avg_list = [], [], []
     qry_total_list, qry_ops_list, qry_avg_list = [], [], []
+
     for n in dataset_sizes:
         subset = all_ids[:n]
-        idx_total, idx_ops, idx_avg = bench_build_inverted_index(subset)
+
+        idx_total, idx_ops, idx_avg = bench_build_inverted_index(subset, DATALAKE_ROOT)
         n_queries = max(50, n // 2)
-        qry_total, qry_ops, qry_avg = bench_query_performance(n_queries)
+        qry_total, qry_ops, qry_avg = bench_query_performance(n_queries, DATALAKE_ROOT)
+
         idx_total_list.append(idx_total)
         idx_ops_list.append(idx_ops)
         idx_avg_list.append(idx_avg)
         qry_total_list.append(qry_total)
         qry_ops_list.append(qry_ops)
         qry_avg_list.append(qry_avg)
+
         print(f"{n:>10} | {idx_total:>15.2f} | {idx_ops:>12.0f} | {idx_avg:>12.3f} | "
               f"{qry_total:>15.2f} | {qry_ops:>12.0f} | {qry_avg:>12.3f}")
+
     print("=" * 108)
 
     # Indexing-only plots

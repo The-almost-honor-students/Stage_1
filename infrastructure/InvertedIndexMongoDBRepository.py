@@ -10,7 +10,6 @@ from pymongo import MongoClient, ASCENDING, UpdateOne
 from pymongo.collection import Collection
 
 from application.InvertedIndexRepository import InvertedIndexRepository
-from domain.book import Book
 
 
 class InvertedIndexMongoDBRepository(InvertedIndexRepository):
